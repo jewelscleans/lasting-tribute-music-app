@@ -1,40 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>StarStage AI — Cinematic Music Videos</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>StarTune AI</title>
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-<div class="bg-canvas"></div>
-
 <main class="container">
 <section class="hero">
-<div class="hero-copy">
-<p class="badge">PREMIUM AI MUSIC VIDEO STUDIO</p>
-<h1>Turn Your Photo + Song Into a Realistic Cinematic Performance</h1>
-<p class="sub">
-Upload your face photo and track. Generate dramatic, movie-style scenes with AI lip-sync,
-then download your finished video.
-</p>
-<div class="hero-chips">
-<span>7-day trial + 1,000 credits</span>
-<span>$29.99/month = 5,000 credits</span>
-<span>1 full video = 1,000 credits</span>
-<span>Extra 1,000 credits = $9.99</span>
-</div>
-</div>
-<div class="hero-card">
-<h3>Launch Offer</h3>
-<p>Start free. Create your first music video today.</p>
-<p class="big">$29.99/mo</p>
-<p class="muted">After 7-day trial • card required</p>
-</div>
+<h1>🎬 StarTune AI</h1>
+<p>Upload your photo + audio and generate realistic lip-sync music videos.</p>
+<ul>
+<li>7-day trial + 1,000 free credits</li>
+<li>$29.99/month = 5,000 credits</li>
+<li>1 generation = 1,000 credits</li>
+</ul>
 </section>
 
 <section class="card">
-<h2>Create Account</h2>
+<h2>Account</h2>
 <p id="authState">Checking login status...</p>
 <div class="grid">
 <form id="signupForm">
@@ -64,11 +49,9 @@ then download your finished video.
 <section class="card hidden" id="appCard">
 <h2>Billing + Credits</h2>
 <p id="subscriptionState">Checking subscription...</p>
-<div class="actions">
-<a id="paypalSubBtn" href="#" target="_blank" rel="noopener noreferrer">Activate Monthly Plan — $29.99</a>
-<a id="paypalCreditsBtn" href="#" target="_blank" rel="noopener noreferrer">Buy 1,000 Extra Credits — $9.99</a>
+<a id="paypalSubBtn" href="#" target="_blank">Activate Monthly Plan — $29.99</a>
+<a id="paypalCreditsBtn" href="#" target="_blank">Buy 1,000 Extra Credits — $9.99</a>
 <button id="creditsConfirmBtn">I Paid — Add 1,000 Credits</button>
-</div>
 <p id="creditsState">Credits: --</p>
 </section>
 
@@ -77,17 +60,15 @@ then download your finished video.
 <form id="musicJobForm" enctype="multipart/form-data">
 <label>Face Photo*</label>
 <input type="file" name="photo" accept="image/*" required />
-<label>Song File*</label>
-<input type="file" name="song" accept="audio/*" required />
+<label>Audio File*</label>
+<input type="file" name="audio" accept="audio/*" required />
 <button type="submit">Create My Music Video (1,000 Credits)</button>
 </form>
-
 <div id="musicJobResult" class="result hidden"></div>
 <h3>Your Creations</h3>
 <div id="musicJobsList">No jobs yet.</div>
 </section>
 </main>
-
 <script src="/app.js"></script>
 </body>
 </html>
