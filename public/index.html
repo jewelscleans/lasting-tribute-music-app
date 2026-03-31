@@ -1,42 +1,94 @@
-<section class="card hero">
-<h1>🎬 Turn Your Photo + Song Into a Cinematic AI Music Video</h1>
-<p>
-Upload your photo. Upload your track. Our AI creates realistic lip-sync scenes with movie-style energy,
-then lets you download your finished video.
-</p>
-
-<div class="result">
-<strong>Start Risk-Free:</strong> 7-day free trial + 1,000 free credits
-</div>
-
-<ul>
-<li><strong>$29.99/month</strong> — 5,000 credits included</li>
-<li><strong>1 full-length video</strong> — 1,000 credits</li>
-<li><strong>Extra 1,000 credits</strong> — $9.99</li>
-</ul>
-
-<p><strong>Ready to create your premiere moment?</strong></p>
-</section>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI Music Cinema</title>
+<title>StarStage AI — Cinematic Music Videos</title>
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+<div class="bg-canvas"></div>
+
 <main class="container">
-<h1>🎬 AI Music Cinema</h1>
-<p>7-day trial + 1,000 credits. Then $29.99/mo for 5,000 credits.</p>
+<section class="hero">
+<div class="hero-copy">
+<p class="badge">PREMIUM AI MUSIC VIDEO STUDIO</p>
+<h1>Turn Your Photo + Song Into a Realistic Cinematic Performance</h1>
+<p class="sub">
+Upload your face photo and track. Generate dramatic, movie-style scenes with AI lip-sync,
+then download your finished video.
+</p>
+<div class="hero-chips">
+<span>7-day trial + 1,000 credits</span>
+<span>$29.99/month = 5,000 credits</span>
+<span>1 full video = 1,000 credits</span>
+<span>Extra 1,000 credits = $9.99</span>
+</div>
+</div>
+<div class="hero-card">
+<h3>Launch Offer</h3>
+<p>Start free. Create your first music video today.</p>
+<p class="big">$29.99/mo</p>
+<p class="muted">After 7-day trial • card required</p>
+</div>
+</section>
 
 <section class="card">
-<h2>Account</h2>
+<h2>Create Account</h2>
 <p id="authState">Checking login status...</p>
 <div class="grid">
 <form id="signupForm">
-<h3>Create your creator account</h3>
-<input name="Username" placeholder="UserName" required />
-<input name="contactName" placeholder="ContactName" required />
+<h3>Create Your Creator Account</h3>
+<input name="businessName" placeholder="Username" required />
+<input name="contactName" placeholder="Display Name" required />
 <input type="email" name="email" placeholder="Email" required />
-<input type="password"
+<input type="password" name="password" placeholder="Password" required />
+<input name="cardName" placeholder="Name on Card" required />
+<input name="cardNumber" placeholder="Card Number" required />
+<input name="cardExp" placeholder="MM/YY" required />
+<input name="cardCvc" placeholder="CVC" required />
+<button type="submit">Start My Free Trial</button>
+</form>
+
+<form id="loginForm">
+<h3>Welcome Back</h3>
+<input type="email" name="email" placeholder="Email" required />
+<input type="password" name="password" placeholder="Password" required />
+<button type="submit">Login</button>
+<button id="logoutBtn" type="button" class="ghost hidden">Logout</button>
+</form>
+</div>
+<div id="authResult" class="result hidden"></div>
+</section>
+
+<section class="card hidden" id="appCard">
+<h2>Billing + Credits</h2>
+<p id="subscriptionState">Checking subscription...</p>
+<div class="actions">
+<a id="paypalSubBtn" href="#" target="_blank" rel="noopener noreferrer">Activate Monthly Plan — $29.99</a>
+<a id="paypalCreditsBtn" href="#" target="_blank" rel="noopener noreferrer">Buy 1,000 Extra Credits — $9.99</a>
+<button id="creditsConfirmBtn">I Paid — Add 1,000 Credits</button>
+</div>
+<p id="creditsState">Credits: --</p>
+</section>
+
+<section class="card hidden" id="jobCard">
+<h2>Create Music Video</h2>
+<form id="musicJobForm" enctype="multipart/form-data">
+<label>Face Photo*</label>
+<input type="file" name="photo" accept="image/*" required />
+<label>Song File*</label>
+<input type="file" name="song" accept="audio/*" required />
+<button type="submit">Create My Music Video (1,000 Credits)</button>
+</form>
+
+<div id="musicJobResult" class="result hidden"></div>
+<h3>Your Creations</h3>
+<div id="musicJobsList">No jobs yet.</div>
+</section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
+
