@@ -19,10 +19,10 @@ min-height: 100vh;
 overflow-x: hidden;
 }
 
-.bg-canvas {
+body::before {
+content: "";
 position: fixed;
 inset: 0;
-z-index: 0;
 pointer-events: none;
 background:
 radial-gradient(circle at 15% 20%, rgba(255, 204, 102, 0.2), transparent 20%),
@@ -36,7 +36,7 @@ from { opacity: 0.7; transform: scale(1); }
 to { opacity: 1; transform: scale(1.03); }
 }
 
-.container {
+.container, .wrap {
 max-width: 1040px;
 margin: 26px auto;
 padding: 0 16px 30px;
@@ -44,73 +44,18 @@ position: relative;
 z-index: 1;
 }
 
-.hero {
-display: grid;
-grid-template-columns: 1.5fr 1fr;
-gap: 16px;
-margin-bottom: 14px;
-}
-
-.hero-copy, .hero-card, .card {
+.hero, .card {
 background: var(--card);
 border: 1px solid var(--stroke);
 border-radius: 18px;
 box-shadow: 0 16px 32px rgba(0,0,0,0.35);
-}
-
-.hero-copy { padding: 22px; }
-.hero-card { padding: 22px; text-align: center; }
-
-.badge {
-display: inline-block;
-font-size: 12px;
-letter-spacing: 1px;
-font-weight: 700;
-color: #1e1504;
-background: linear-gradient(120deg, var(--gold), #ffdca2);
-border-radius: 999px;
-padding: 7px 11px;
-}
-
-h1 {
-margin: 12px 0 10px;
-line-height: 1.08;
-font-size: 38px;
-color: #ffe8bd;
-}
-
-.sub {
-font-size: 16px;
-color: var(--muted);
-max-width: 95%;
-}
-
-.hero-chips {
-margin-top: 14px;
-display: flex;
-flex-wrap: wrap;
-gap: 8px;
-}
-.hero-chips span {
-font-size: 13px;
-border-radius: 999px;
-padding: 8px 12px;
-background: rgba(255,255,255,0.08);
-border: 1px solid rgba(255,255,255,0.14);
-}
-
-.big {
-font-size: 42px;
-font-weight: 800;
-margin: 8px 0;
-color: var(--gold);
-}
-.muted { color: var(--muted); }
-
-.card {
 padding: 18px;
 margin-bottom: 14px;
 }
+
+h1 { color: #ffe8bd; margin: 0 0 10px; }
+h2, h3 { margin-top: 0; }
+p, li { color: var(--muted); }
 
 .grid {
 display: grid;
@@ -118,7 +63,7 @@ grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
 gap: 12px;
 }
 
-input, button, a {
+input, textarea, button, a {
 width: 100%;
 display: block;
 border-radius: 12px;
@@ -127,7 +72,7 @@ margin: 8px 0;
 font-size: 14px;
 }
 
-input {
+input, textarea {
 border: 1px solid rgba(255,255,255,0.15);
 background: #161021;
 color: #fff3d5;
@@ -151,9 +96,7 @@ color: #ffe0a7;
 box-shadow: none;
 }
 
-.actions { display: grid; gap: 8px; }
-
-.result {
+.result, .msg {
 margin-top: 10px;
 border-radius: 10px;
 padding: 10px;
@@ -162,9 +105,4 @@ border: 1px solid rgba(255,255,255,0.16);
 }
 
 .hidden { display: none; }
-
-@media (max-width: 860px) {
-.hero { grid-template-columns: 1fr; }
-h1 { font-size: 31px; }
-}
 
