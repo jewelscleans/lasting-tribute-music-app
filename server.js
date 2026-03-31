@@ -1,316 +1,454 @@
 const express = require('express');
-const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'change-this-session-secret';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'change-me';
 const PAYPAL_EMAIL = process.env.PAYPAL_EMAIL || 'rangerbleau11@gmail.com';
-const PAYPAL_SUBSCRIPTION_PRICE = Number(process.env.PAYPAL_SUBSCRIPTION_PRICE || 29.99);
-const PAYPAL_CREDITS_PRICE = Number(process.env.PAYPAL_CREDITS_PRICE || 9.99);
 
-const MUSIC_JOB_CREDIT_COST = Number(process.env.MUSIC_JOB_CREDIT_COST || 1000);
 const TRIAL_DAYS = Number(process.env.TRIAL_DAYS || 7);
 const TRIAL_CREDITS = Number(process.env.TRIAL_CREDITS || 1000);
+const MONTHLY_PRICE = Number(process.env.MONTHLY_PRICE || 29.99);
 const MONTHLY_CREDITS = Number(process.env.MONTHLY_CREDITS || 5000);
+const ADDON_PRICE = Number(process.env.ADDON_PRICE || 9.99);
 const ADDON_CREDITS = Number(process.env.ADDON_CREDITS || 1000);
+const CREDITS_PER_VIDEO = Number(process.env.CREDITS_PER_VIDEO || 1000);
+
+const VIDEO_PROVIDER = process.env.VIDEO_PROVIDER || 'mock';
+const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY || '';
+const HEYGEN_BASE = process.env.HEYGEN_BASE || 'https://api.heygen.com';
+
+// These are configurable in case HeyGen adjusts routes on your account/version:
+const HEYGEN_UPLOAD_ENDPOINT = process.env.HEYGEN_UPLOAD_ENDPOINT || '/v1/asset';
+const HEYGEN_TALKING_PHOTO_ENDPOINT = process.env.HEYGEN_TALKING_PHOTO_ENDPOINT || '/v2/photo_avatar';
+const HEYGEN_VIDEO_GENERATE_ENDPOINT = process.env.HEYGEN_VIDEO_GENERATE_ENDPOINT || '/v2/video/generate';
+const HEYGEN_VIDEO_STATUS_ENDPOINT_TEMPLATE =
+process.env.HEYGEN_VIDEO_STATUS_ENDPOINT_TEMPLATE || '/v1/video_status.get?video_id={videoId}';
 
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'subscriptions.json');
 const CREDITS_FILE = path.join(DATA_DIR, 'credits.json');
-const MUSIC_JOBS_FILE = path.join(DATA_DIR, 'music_jobs.json');
+const VIDEOS_FILE = path.join(DATA_DIR, 'videos.json');
 
-for (const dir of [DATA_DIR, UPLOAD_DIR]) {
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-for (const file of [USERS_FILE, SUBSCRIPTIONS_FILE, CREDITS_FILE, MUSIC_JOBS_FILE]) {
-if (!fs.existsSync(file)) fs.writeFileSync(file, '[]', 'utf8');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+for (const f of [USERS_FILE, CREDITS_FILE, VIDEOS_FILE]) {
+if (!fs.existsSync(f)) fs.writeFileSync(f, '[]', 'utf8');
 }
 
-function readJson(filePath) {
-return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-function writeJson(filePath, data) {
-fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-}
+const readJson = (f) => JSON.parse(fs.readFileSync(f, 'utf8'));
+const writeJson = (f, d) => fs.writeFileSync(f, JSON.stringify(d, null, 2), 'utf8');
+
 function requireAuth(req, res, next) {
-if (!req.session.user) return res.status(401).json({ error: 'Please log in.' });
-return next();
+if (!req.session.user) return res.status(401).json({ error: 'Login required' });
+next();
 }
 
-function upsertSubscriptionByUser(userId, patch) {
-const rows = readJson(SUBSCRIPTIONS_FILE);
-const idx = rows.findIndex((r) => r.userId === userId);
-const current = idx >= 0 ? rows[idx] : { userId };
-const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
-if (idx >= 0) rows[idx] = next;
-else rows.push(next);
-writeJson(SUBSCRIPTIONS_FILE, rows);
-return next;
+function getCredits(userId) {
+return readJson(CREDITS_FILE).find((r) => r.userId === userId)?.balance || 0;
 }
-function getSubscription(userId) {
-const rows = readJson(SUBSCRIPTIONS_FILE);
-return rows.find((s) => s.userId === userId) || null;
-}
-function getCreditBalance(userId) {
+function setCredits(userId, balance, reason = 'update') {
 const rows = readJson(CREDITS_FILE);
-const row = rows.find((r) => r.userId === userId);
-return row ? Number(row.balance || 0) : 0;
-}
-function addCredits(userId, amount, reason = 'manual') {
-const rows = readJson(CREDITS_FILE);
-const idx = rows.findIndex((r) => r.userId === userId);
-const current = idx >= 0 ? Number(rows[idx].balance || 0) : 0;
-const next = { userId, balance: current + amount, updatedAt: new Date().toISOString(), lastReason: reason };
-if (idx >= 0) rows[idx] = next;
-else rows.push(next);
+const i = rows.findIndex((r) => r.userId === userId);
+const row = { userId, balance, reason, updatedAt: new Date().toISOString() };
+if (i >= 0) rows[i] = row; else rows.push(row);
 writeJson(CREDITS_FILE, rows);
-return next.balance;
 }
-function consumeCredits(userId, amount, reason = 'usage') {
-const rows = readJson(CREDITS_FILE);
-const idx = rows.findIndex((r) => r.userId === userId);
-const current = idx >= 0 ? Number(rows[idx].balance || 0) : 0;
-if (current < amount) return { ok: false, balance: current };
-const next = { userId, balance: current - amount, updatedAt: new Date().toISOString(), lastReason: reason };
-if (idx >= 0) rows[idx] = next;
-else rows.push(next);
-writeJson(CREDITS_FILE, rows);
-return { ok: true, balance: next.balance };
+function addCredits(userId, amount, reason = 'add') {
+setCredits(userId, getCredits(userId) + amount, reason);
+}
+function consumeCredits(userId, amount) {
+const bal = getCredits(userId);
+if (bal < amount) return false;
+setCredits(userId, bal - amount, 'video_generation');
+return true;
 }
 
-function processBillingForUser(userId) {
-const sub = getSubscription(userId);
-if (!sub || sub.status === 'canceled') return sub;
-
-const now = Date.now();
-const trialEnd = sub.trialEndsAt ? new Date(sub.trialEndsAt).getTime() : null;
-let current = { ...sub };
-
-if (current.status === 'trialing' && trialEnd && now >= trialEnd) {
-current.status = 'active';
-current.currentPeriodStart = new Date(trialEnd).toISOString();
-current.currentPeriodEnd = new Date(trialEnd + 30 * 24 * 60 * 60 * 1000).toISOString();
-current.lastChargeAt = new Date(now).toISOString();
-current.lastChargeAmount = PAYPAL_SUBSCRIPTION_PRICE;
-addCredits(userId, MONTHLY_CREDITS, 'monthly_subscription_renewal');
-current = upsertSubscriptionByUser(userId, current);
+function createVideoJob(userId, input) {
+const rows = readJson(VIDEOS_FILE);
+const row = {
+jobId: uuidv4(),
+userId,
+provider: VIDEO_PROVIDER,
+status: 'processing',
+input,
+output: null,
+providerVideoId: null,
+providerMeta: {},
+createdAt: new Date().toISOString(),
+updatedAt: new Date().toISOString()
+};
+rows.unshift(row);
+writeJson(VIDEOS_FILE, rows);
+return row;
+}
+function updateVideoJob(jobId, patch) {
+const rows = readJson(VIDEOS_FILE);
+const i = rows.findIndex((r) => r.jobId === jobId);
+if (i < 0) return null;
+rows[i] = { ...rows[i], ...patch, updatedAt: new Date().toISOString() };
+writeJson(VIDEOS_FILE, rows);
+return rows[i];
 }
 
-return current;
-}
-function hasActiveSubscription(userId) {
-const sub = processBillingForUser(userId);
-if (!sub) return false;
-if (sub.status === 'trialing') return new Date(sub.trialEndsAt).getTime() > Date.now();
-if (sub.status === 'active') return new Date(sub.currentPeriodEnd).getTime() > Date.now();
-return false;
-}
-
-function updateMusicJob(jobId, patch) {
-const jobs = readJson(MUSIC_JOBS_FILE);
-const idx = jobs.findIndex((j) => j.jobId === jobId);
-if (idx < 0) return null;
-jobs[idx] = { ...jobs[idx], ...patch, updatedAt: new Date().toISOString() };
-writeJson(MUSIC_JOBS_FILE, jobs);
-return jobs[idx];
-}
-function runMockMusicVideoPipeline(jobId) {
-setTimeout(() => {
-try {
-const outputDir = path.join(UPLOAD_DIR, 'music-jobs', jobId);
-const outputFilename = 'output.mp4';
-const outputPath = path.join(outputDir, outputFilename);
-const fallbackSource = path.join(__dirname, 'public', 'demo-output.mp4');
-
-if (fs.existsSync(fallbackSource)) {
-fs.copyFileSync(fallbackSource, outputPath);
-updateMusicJob(jobId, { status: 'completed', output: `music-jobs/${jobId}/${outputFilename}` });
-} else {
-updateMusicJob(jobId, { status: 'failed', error: 'Missing demo-output.mp4' });
-}
-} catch (err) {
-console.error(err);
-updateMusicJob(jobId, { status: 'failed', error: 'Render failed' });
-}
-}, 7000);
-}
-
-const musicJobStorage = multer.diskStorage({
-destination: (req, file, cb) => {
-const jobId = req.musicJobId || uuidv4();
-req.musicJobId = jobId;
-const dir = path.join(UPLOAD_DIR, 'music-jobs', jobId);
+const storage = multer.diskStorage({
+destination: (req, _file, cb) => {
+const jobId = req.jobId || uuidv4();
+req.jobId = jobId;
+const dir = path.join(UPLOAD_DIR, 'video-jobs', jobId);
 fs.mkdirSync(dir, { recursive: true });
 cb(null, dir);
 },
 filename: (_req, file, cb) => {
-const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-cb(null, `${Date.now()}-${safeName}`);
+const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+cb(null, `${Date.now()}-${safe}`);
 }
 });
-const uploadMusicJobAssets = multer({
-storage: musicJobStorage,
-limits: { files: 2, fileSize: 512 * 1024 * 1024 }
-});
+const upload = multer({ storage, limits: { fileSize: 1024 * 1024 * 1024 } });
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(session({
 secret: SESSION_SECRET,
 resave: false,
-saveUninitialized: false,
-cookie: { httpOnly: true, sameSite: 'lax', secure: false, maxAge: 1000 * 60 * 60 * 24 * 7 }
+saveUninitialized: false
 }));
+app.use('/uploads', express.static(UPLOAD_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/healthz', (_req, res) => {
-res.json({ ok: true, service: 'lasting-tribute-music-app', ts: new Date().toISOString() });
+res.json({ ok: true, provider: VIDEO_PROVIDER });
 });
 
+// ---------- Auth ----------
 app.post('/api/auth/signup', async (req, res) => {
-try {
-const { businessName, contactName, email, password, cardName, cardNumber, cardExp, cardCvc } = req.body;
-if (!businessName || !contactName || !email || !password || !cardName || !cardNumber || !cardExp || !cardCvc) {
-return res.status(400).json({ error: 'Missing signup fields. Card details are required for 7-day trial.' });
-}
+const { username, email, password } = req.body;
+if (!username || !email || !password) return res.status(400).json({ error: 'Missing fields' });
 
 const users = readJson(USERS_FILE);
-const existing = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-if (existing) return res.status(409).json({ error: 'Email already registered.' });
+if (users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+return res.status(409).json({ error: 'Email already exists' });
+}
 
-const cleanedCard = String(cardNumber).replace(/\D/g, '');
-if (cleanedCard.length < 12) return res.status(400).json({ error: 'Invalid card number.' });
-
-const passwordHash = await bcrypt.hash(password, 10);
 const user = {
 userId: uuidv4(),
+username,
+email,
+passwordHash: await bcrypt.hash(password, 10),
 createdAt: new Date().toISOString(),
-businessName, contactName, email, passwordHash,
-billing: { cardName, cardLast4: cleanedCard.slice(-4), cardExp }
+trialEndsAt: new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString(),
+plan: 'trial'
 };
 users.push(user);
 writeJson(USERS_FILE, users);
 
-const now = Date.now();
-upsertSubscriptionByUser(user.userId, {
-status: 'trialing',
-plan: 'creator_monthly',
-trialStartsAt: new Date(now).toISOString(),
-trialEndsAt: new Date(now + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-amountAfterTrial: PAYPAL_SUBSCRIPTION_PRICE
-});
+addCredits(user.userId, TRIAL_CREDITS, 'trial_bonus');
 
-addCredits(user.userId, TRIAL_CREDITS, 'trial_signup_bonus');
-
-req.session.user = { userId: user.userId, businessName: user.businessName, contactName: user.contactName, email: user.email };
-return res.json({ success: true, user: req.session.user });
-} catch (err) {
-console.error(err);
-return res.status(500).json({ error: 'Signup failed.' });
-}
+req.session.user = { userId: user.userId, username, email };
+res.json({ ok: true, user: req.session.user, trialCredits: TRIAL_CREDITS });
 });
 
 app.post('/api/auth/login', async (req, res) => {
-try {
 const { email, password } = req.body;
 const users = readJson(USERS_FILE);
 const user = users.find((u) => u.email.toLowerCase() === String(email).toLowerCase());
-if (!user) return res.status(401).json({ error: 'Invalid credentials.' });
+if (!user) return res.status(401).json({ error: 'Invalid login' });
 
 const ok = await bcrypt.compare(password, user.passwordHash);
-if (!ok) return res.status(401).json({ error: 'Invalid credentials.' });
+if (!ok) return res.status(401).json({ error: 'Invalid login' });
 
-req.session.user = { userId: user.userId, businessName: user.businessName, contactName: user.contactName, email: user.email };
-processBillingForUser(user.userId);
-return res.json({ success: true, user: req.session.user });
-} catch (err) {
-console.error(err);
-return res.status(500).json({ error: 'Login failed.' });
-}
+req.session.user = { userId: user.userId, username: user.username, email: user.email };
+res.json({ ok: true, user: req.session.user });
 });
 
-app.post('/api/auth/logout', (req, res) => req.session.destroy(() => res.json({ success: true })));
-app.get('/api/auth/me', (req, res) => {
-if (req.session.user) processBillingForUser(req.session.user.userId);
-res.json({ user: req.session.user || null });
-});
+app.post('/api/auth/logout', (req, res) => req.session.destroy(() => res.json({ ok: true })));
+app.get('/api/auth/me', (req, res) => res.json({ user: req.session.user || null }));
 
-app.get('/api/subscription/me', requireAuth, (req, res) => {
-const sub = processBillingForUser(req.session.user.userId);
+// ---------- Billing ----------
+app.get('/api/billing', requireAuth, (req, res) => {
 res.json({
-subscription: sub,
-active: hasActiveSubscription(req.session.user.userId),
-paypal: {
-email: PAYPAL_EMAIL,
-subscriptionLink: `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(PAYPAL_EMAIL)}&item_name=${encodeURIComponent('AI Music Video App - Monthly Subscription')}&amount=${PAYPAL_SUBSCRIPTION_PRICE.toFixed(2)}&currency_code=USD`,
-creditsLink: `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(PAYPAL_EMAIL)}&item_name=${encodeURIComponent('AI Music Video App - 1000 Credits')}&amount=${PAYPAL_CREDITS_PRICE.toFixed(2)}&currency_code=USD`
-}
+monthlyPrice: MONTHLY_PRICE,
+monthlyCredits: MONTHLY_CREDITS,
+addOnPrice: ADDON_PRICE,
+addOnCredits: ADDON_CREDITS,
+creditsPerVideo: CREDITS_PER_VIDEO,
+paypalEmail: PAYPAL_EMAIL,
+paypalMonthlyLink: `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(PAYPAL_EMAIL)}&item_name=${encodeURIComponent('AI Music App Monthly')}&amount=${MONTHLY_PRICE.toFixed(2)}&currency_code=USD`,
+paypalAddonLink: `https://www.paypal.com/cgi-bin/webscr?cmd=_xclick&business=${encodeURIComponent(PAYPAL_EMAIL)}&item_name=${encodeURIComponent('AI Music App Credits Pack')}&amount=${ADDON_PRICE.toFixed(2)}&currency_code=USD`
 });
 });
 
-app.get('/api/credits/me', requireAuth, (req, res) => {
-processBillingForUser(req.session.user.userId);
-res.json({ balance: getCreditBalance(req.session.user.userId), costPerVideo: MUSIC_JOB_CREDIT_COST });
+app.get('/api/credits', requireAuth, (req, res) => {
+res.json({ balance: getCredits(req.session.user.userId) });
 });
 
-app.post('/api/credits/manual-add', requireAuth, (req, res) => {
-const balance = addCredits(req.session.user.userId, ADDON_CREDITS, 'paypal_9_99_manual');
-res.json({ success: true, balance, added: ADDON_CREDITS });
+app.post('/api/credits/addon-confirm', requireAuth, (req, res) => {
+addCredits(req.session.user.userId, ADDON_CREDITS, 'addon');
+res.json({ ok: true, balance: getCredits(req.session.user.userId) });
 });
 
-app.post('/api/music-jobs', requireAuth, uploadMusicJobAssets.fields([{ name: 'photo', maxCount: 1 }, { name: 'song', maxCount: 1 }]), (req, res) => {
-try {
-if (!hasActiveSubscription(req.session.user.userId)) {
-return res.status(402).json({ error: 'Active trial or subscription required.' });
-}
-
-const photoFile = req.files?.photo?.[0];
-const songFile = req.files?.song?.[0];
-if (!photoFile || !songFile) return res.status(400).json({ error: 'photo and song are required.' });
-
-const debit = consumeCredits(req.session.user.userId, MUSIC_JOB_CREDIT_COST, 'music_video_generation');
-if (!debit.ok) return res.status(402).json({ error: `Not enough credits. ${MUSIC_JOB_CREDIT_COST} required.` });
-
-const jobId = req.musicJobId || uuidv4();
-const jobs = readJson(MUSIC_JOBS_FILE);
-const job = {
-jobId, userId: req.session.user.userId, createdAt: new Date().toISOString(), status: 'processing',
-input: { photo: `music-jobs/${jobId}/${photoFile.filename}`, song: `music-jobs/${jobId}/${songFile.filename}` },
-output: null
+// ---------- HeyGen helpers ----------
+async function heygenFetch(endpoint, opts = {}) {
+const url = `${HEYGEN_BASE}${endpoint}`;
+const headers = {
+'x-api-key': HEYGEN_API_KEY,
+...(opts.headers || {})
 };
-jobs.push(job);
-writeJson(MUSIC_JOBS_FILE, jobs);
-
-runMockMusicVideoPipeline(jobId);
-return res.json({ success: true, job, remainingCredits: debit.balance, costPerVideo: MUSIC_JOB_CREDIT_COST });
-} catch (err) {
-console.error(err);
-return res.status(500).json({ error: 'Failed to create music video job.' });
+return fetch(url, { ...opts, headers });
 }
+
+function fileToBlob(absPath, mime = 'application/octet-stream') {
+const buff = fs.readFileSync(absPath);
+return new Blob([buff], { type: mime });
+}
+
+function guessMime(filePath) {
+const ext = path.extname(filePath).toLowerCase();
+if (['.jpg', '.jpeg'].includes(ext)) return 'image/jpeg';
+if (ext === '.png') return 'image/png';
+if (ext === '.webp') return 'image/webp';
+if (ext === '.mp3') return 'audio/mpeg';
+if (ext === '.wav') return 'audio/wav';
+if (ext === '.m4a') return 'audio/mp4';
+return 'application/octet-stream';
+}
+
+async function heygenUploadAsset(absPath, type) {
+const form = new FormData();
+form.append('file', fileToBlob(absPath, guessMime(absPath)), path.basename(absPath));
+form.append('type', type); // image | audio
+
+const r = await heygenFetch(HEYGEN_UPLOAD_ENDPOINT, {
+method: 'POST',
+body: form
+});
+const j = await r.json();
+if (!r.ok) throw new Error(`HeyGen upload failed: ${JSON.stringify(j)}`);
+
+// tolerate multiple response shapes
+const data = j.data || j;
+return {
+assetId: data.asset_id || data.id || data.audio_asset_id || data.image_asset_id || null,
+url: data.url || data.asset_url || data.audio_url || data.image_url || null,
+raw: j
+};
+}
+
+async function heygenCreateTalkingPhoto(photoAbsPath) {
+// Attempt explicit talking-photo endpoint first
+try {
+const form = new FormData();
+form.append('file', fileToBlob(photoAbsPath, guessMime(photoAbsPath)), path.basename(photoAbsPath));
+
+const r = await heygenFetch(HEYGEN_TALKING_PHOTO_ENDPOINT, { method: 'POST', body: form });
+const j = await r.json();
+if (r.ok) {
+const d = j.data || j;
+const talkingPhotoId = d.talking_photo_id || d.id;
+if (talkingPhotoId) return { talkingPhotoId, raw: j };
+}
+} catch (_e) {
+// fallback below
+}
+
+// Fallback: upload asset and use returned talking_photo_id if account returns it
+const up = await heygenUploadAsset(photoAbsPath, 'image');
+const talkingPhotoId = up.raw?.data?.talking_photo_id || up.raw?.talking_photo_id;
+if (!talkingPhotoId) {
+throw new Error('Could not create talking photo. Check HeyGen account permissions/endpoints.');
+}
+return { talkingPhotoId, raw: up.raw };
+}
+
+async function heygenGenerateVideo({ talkingPhotoId, audioAssetId, style, callbackId }) {
+const payload = {
+title: `User Video ${callbackId}`,
+callback_id: callbackId,
+video_inputs: [
+{
+character: {
+type: 'talking_photo',
+talking_photo_id: talkingPhotoId,
+talking_style: 'expressive',
+expression: 'default',
+super_resolution: true,
+matting: false,
+...(style ? { prompt: style, use_avatar_iv_model: true } : {})
+},
+voice: {
+type: 'audio',
+audio_asset_id: audioAssetId
+},
+background: {
+type: 'color',
+value: '#101218'
+}
+}
+]
+};
+
+const r = await heygenFetch(HEYGEN_VIDEO_GENERATE_ENDPOINT, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(payload)
+});
+const j = await r.json();
+if (!r.ok) throw new Error(`HeyGen generate failed: ${JSON.stringify(j)}`);
+
+const d = j.data || j;
+return {
+videoId: d.video_id || d.id || d.videoId,
+raw: j
+};
+}
+
+async function heygenCheckVideo(videoId) {
+const endpoint = HEYGEN_VIDEO_STATUS_ENDPOINT_TEMPLATE.replace('{videoId}', encodeURIComponent(videoId));
+const r = await heygenFetch(endpoint, { method: 'GET' });
+const j = await r.json();
+if (!r.ok) throw new Error(`HeyGen status failed: ${JSON.stringify(j)}`);
+
+const d = j.data || j;
+const status = (d.status || d.video_status || '').toLowerCase();
+const videoUrl = d.video_url || d.url || d.videoUrl || null;
+return { status, videoUrl, raw: j };
+}
+
+async function pollHeyGenUntilDone(jobId, videoId) {
+const maxAttempts = 60; // ~10 min at 10s
+for (let i = 0; i < maxAttempts; i += 1) {
+await new Promise((r) => setTimeout(r, 10000));
+try {
+const s = await heygenCheckVideo(videoId);
+if (['completed', 'success', 'done'].includes(s.status) && s.videoUrl) {
+updateVideoJob(jobId, { status: 'completed', output: s.videoUrl, providerMeta: s.raw });
+return;
+}
+if (['failed', 'error'].includes(s.status)) {
+updateVideoJob(jobId, { status: 'failed', error: 'HeyGen render failed', providerMeta: s.raw });
+return;
+}
+updateVideoJob(jobId, { providerMeta: s.raw });
+} catch (e) {
+updateVideoJob(jobId, { providerMeta: { statusCheckError: String(e.message || e) } });
+}
+}
+updateVideoJob(jobId, { status: 'failed', error: 'HeyGen timeout' });
+}
+
+// ---------- Video generation ----------
+app.post(
+'/api/video-jobs',
+requireAuth,
+upload.fields([{ name: 'photo', maxCount: 1 }, { name: 'audio', maxCount: 1 }]),
+async (req, res) => {
+try {
+const photo = req.files?.photo?.[0];
+const audio = req.files?.audio?.[0];
+const style = req.body.style || 'cinematic';
+
+if (!photo || !audio) return res.status(400).json({ error: 'Photo and audio are required.' });
+if (!consumeCredits(req.session.user.userId, CREDITS_PER_VIDEO)) {
+return res.status(402).json({ error: 'Not enough credits.' });
+}
+
+const input = {
+photo: `video-jobs/${req.jobId}/${photo.filename}`,
+audio: `video-jobs/${req.jobId}/${audio.filename}`,
+style
+};
+const job = createVideoJob(req.session.user.userId, input);
+
+if (VIDEO_PROVIDER !== 'heygen' || !HEYGEN_API_KEY) {
+// fallback mock
+const demo = path.join(__dirname, 'public', 'demo-output.mp4');
+const outDir = path.join(UPLOAD_DIR, 'video-jobs', job.jobId);
+const outPath = path.join(outDir, 'output.mp4');
+if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+setTimeout(() => {
+if (fs.existsSync(demo)) {
+fs.copyFileSync(demo, outPath);
+updateVideoJob(job.jobId, { status: 'completed', output: `/uploads/video-jobs/${job.jobId}/output.mp4` });
+} else {
+updateVideoJob(job.jobId, { status: 'failed', error: 'Missing demo-output.mp4' });
+}
+}, 6000);
+
+return res.json({ ok: true, jobId: job.jobId, provider: 'mock', balance: getCredits(req.session.user.userId) });
+}
+
+// real heygen path
+const photoAbs = path.join(UPLOAD_DIR, input.photo);
+const audioAbs = path.join(UPLOAD_DIR, input.audio);
+
+const tp = await heygenCreateTalkingPhoto(photoAbs);
+const au = await heygenUploadAsset(audioAbs, 'audio');
+if (!au.assetId) throw new Error('Could not get HeyGen audio asset ID');
+
+const gen = await heygenGenerateVideo({
+talkingPhotoId: tp.talkingPhotoId,
+audioAssetId: au.assetId,
+style,
+callbackId: job.jobId
 });
 
-app.get('/api/music-jobs/me', requireAuth, (req, res) => {
-const jobs = readJson(MUSIC_JOBS_FILE).filter((j) => j.userId === req.session.user.userId);
-res.json(jobs.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)));
+if (!gen.videoId) throw new Error('No HeyGen video ID returned');
+
+updateVideoJob(job.jobId, {
+providerVideoId: gen.videoId,
+providerMeta: { talkingPhoto: tp.raw, audioUpload: au.raw, generate: gen.raw }
 });
 
-app.get('/api/music-jobs/:jobId/download', requireAuth, (req, res) => {
-const jobs = readJson(MUSIC_JOBS_FILE);
-const job = jobs.find((j) => j.jobId === req.params.jobId && j.userId === req.session.user.userId);
-if (!job) return res.status(404).json({ error: 'Job not found.' });
-if (job.status !== 'completed' || !job.output) return res.status(409).json({ error: 'Job not ready yet.' });
-
-const absolutePath = path.join(UPLOAD_DIR, job.output);
-if (!fs.existsSync(absolutePath)) return res.status(404).json({ error: 'Output missing.' });
-return res.download(absolutePath, `${job.jobId}.mp4`);
+pollHeyGenUntilDone(job.jobId, gen.videoId).catch((e) => {
+updateVideoJob(job.jobId, { status: 'failed', error: String(e.message || e) });
 });
 
-app.listen(PORT, () => console.log(`Music app running on http://localhost:${PORT}`));
+return res.json({
+ok: true,
+jobId: job.jobId,
+provider: 'heygen',
+providerVideoId: gen.videoId,
+balance: getCredits(req.session.user.userId)
+});
+} catch (e) {
+console.error(e);
+return res.status(500).json({ error: e.message || 'Video job failed' });
+}
+}
+);
+
+app.get('/api/video-jobs', requireAuth, (req, res) => {
+const rows = readJson(VIDEOS_FILE).filter((r) => r.userId === req.session.user.userId);
+res.json(rows);
+});
+
+app.get('/api/video-jobs/:jobId/download', requireAuth, (req, res) => {
+const rows = readJson(VIDEOS_FILE);
+const row = rows.find((r) => r.jobId === req.params.jobId && r.userId === req.session.user.userId);
+if (!row) return res.status(404).json({ error: 'Not found' });
+if (row.status !== 'completed' || !row.output) return res.status(409).json({ error: 'Not ready' });
+
+// If HeyGen returns hosted URL, redirect to it
+if (String(row.output).startsWith('http')) return res.redirect(row.output);
+
+// Else local file
+const local = row.output.startsWith('/uploads/')
+? path.join(UPLOAD_DIR, row.output.replace('/uploads/', ''))
+: path.join(UPLOAD_DIR, row.output);
+
+if (!fs.existsSync(local)) return res.status(404).json({ error: 'Output missing' });
+return res.download(local, `${row.jobId}.mp4`);
+});
+
+app.listen(PORT, () => {
+console.log(`App running on http://localhost:${PORT} provider=${VIDEO_PROVIDER}`);
+});
+
