@@ -1,0 +1,110 @@
+* { box-sizing: border-box; }
+
+body {
+margin: 0;
+font-family: Arial, sans-serif;
+color: #fff7e8;
+min-height: 100vh;
+background:
+radial-gradient(circle at 50% -20%, rgba(255, 220, 120, 0.35), transparent 45%),
+linear-gradient(180deg, #3a0f0f 0%, #1e0b17 45%, #0c0710 100%);
+overflow-x: hidden;
+}
+
+body::before,
+body::after {
+content: "";
+position: fixed;
+inset: 0;
+pointer-events: none;
+z-index: 0;
+}
+
+/* Firework spark layer */
+body::before {
+background:
+radial-gradient(circle, rgba(255, 215, 0, .9) 0 2px, transparent 3px) 10% 20%/180px 180px,
+radial-gradient(circle, rgba(255, 105, 180, .8) 0 2px, transparent 3px) 70% 15%/220px 220px,
+radial-gradient(circle, rgba(135, 206, 250, .8) 0 2px, transparent 3px) 35% 70%/200px 200px,
+radial-gradient(circle, rgba(255, 255, 255, .8) 0 1px, transparent 2px) 80% 60%/160px 160px;
+animation: twinkle 2.4s infinite alternate;
+opacity: 0.8;
+}
+
+/* Cinema spotlight glow */
+body::after {
+background: radial-gradient(ellipse at 50% 0%, rgba(255, 220, 140, 0.22), transparent 55%);
+}
+
+@keyframes twinkle {
+from { opacity: 0.45; transform: scale(1); }
+to { opacity: 0.9; transform: scale(1.03); }
+}
+
+.container {
+position: relative;
+z-index: 1;
+max-width: 980px;
+margin: 22px auto;
+padding: 0 14px 28px;
+}
+
+.card {
+background: rgba(24, 10, 20, 0.78);
+border: 1px solid rgba(255, 204, 120, 0.35);
+border-radius: 16px;
+padding: 18px;
+margin-bottom: 14px;
+box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+.hero {
+border: 2px solid rgba(255, 208, 128, 0.6);
+background:
+linear-gradient(135deg, rgba(255, 163, 69, 0.14), rgba(255, 73, 148, 0.10)),
+rgba(24, 10, 20, 0.82);
+}
+
+.hero h1 {
+margin: 0 0 8px 0;
+font-size: 34px;
+line-height: 1.08;
+color: #ffe8b2;
+text-shadow: 0 0 16px rgba(255, 190, 92, 0.35);
+}
+
+.hero p, li { color: #ffeed0; }
+
+.grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+gap: 12px;
+}
+
+input, button, a {
+display: block;
+width: 100%;
+margin: 8px 0;
+padding: 11px;
+border-radius: 12px;
+font-size: 14px;
+}
+
+input {
+border: 1px solid #734a60;
+background: #180d18;
+color: #fff1d4;
+}
+
+button, a {
+border: 0;
+cursor: pointer;
+text-decoration: none;
+text-align: center;
+font-weight: 700;
+color: #2a1703;
+background: linear-gradient(135deg, #ffd36a, #ff8a5b);
+box-shadow: 0 8px 18px rgba(255, 153, 85, 0.3);
+}
+
+button.g
