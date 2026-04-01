@@ -1,4 +1,5 @@
-* { box-sizing: border-box; }
+body { outline: 8px solid lime !important; }
+ { box-sizing: border-box; }
 
 :root {
 --gold: #ffcf70;
