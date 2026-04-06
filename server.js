@@ -22,6 +22,8 @@ const CREDITS_PER_VIDEO = Number(process.env.CREDITS_PER_VIDEO || 1000);
 
 const VIDEO_PROVIDER = process.env.VIDEO_PROVIDER || 'mock';
 const HEYGEN_API_KEY = (process.env.HEYGEN_API_KEY || '').trim();
+const USE_HEYGEN = HEYGEN_API_KEY && HEYGEN_API_KEY !== 'off';
+
 
 const HEYGEN_BASE = process.env.HEYGEN_BASE || 'https://api.heygen.com';
 
