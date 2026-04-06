@@ -20,9 +20,10 @@ const ADDON_PRICE = Number(process.env.ADDON_PRICE || 9.99);
 const ADDON_CREDITS = Number(process.env.ADDON_CREDITS || 1000);
 const CREDITS_PER_VIDEO = Number(process.env.CREDITS_PER_VIDEO || 1000);
 
-const VIDEO_PROVIDER = process.env.VIDEO_PROVIDER || 'mock';
-const HEYGEN_API_KEY = (process.env.HEYGEN_API_KEY || '').trim();
-const USE_HEYGEN = HEYGEN_API_KEY && HEYGEN_API_KEY !== 'off';
+const VIDEO_PROVIDER = 'mock'; // force local render
+const HEYGEN_API_KEY = ''; // force off
+const USE_HEYGEN = false; // hard disable
+
 
 
 const HEYGEN_BASE = process.env.HEYGEN_BASE || 'https://api.heygen.com';
