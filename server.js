@@ -21,7 +21,8 @@ const ADDON_CREDITS = Number(process.env.ADDON_CREDITS || 1000);
 const CREDITS_PER_VIDEO = Number(process.env.CREDITS_PER_VIDEO || 1000);
 
 const VIDEO_PROVIDER = process.env.VIDEO_PROVIDER || 'mock';
-const HEYGEN_API_KEY = process.env.HEYGEN_API_KEY || '';
+const HEYGEN_API_KEY = (process.env.HEYGEN_API_KEY || '').trim();
+
 const HEYGEN_BASE = process.env.HEYGEN_BASE || 'https://api.heygen.com';
 
 // These are configurable in case HeyGen adjusts routes on your account/version:
