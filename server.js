@@ -1,3 +1,4 @@
+const USE_HEYGEN = false;
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
